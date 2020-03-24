@@ -1067,6 +1067,9 @@ Outputs:
   S3BucketWeb: 
     Value: !Ref S3BucketWeb
     Description: S3 bucket name hosting web application
+  WebsiteCDN:
+    Value: !Ref S3BucketWebDistribution
+    Description: CloudFront CDN for distributing web application 
   WebsiteURL:
     Description: The URL for the web application
     Value: !Sub 

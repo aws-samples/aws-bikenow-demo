@@ -23,6 +23,9 @@ Parameters:
   CognityIdentityPool:
     Description: Cognito identity pool
     Type: String
+  WebsiteCDN:
+    Description: CloudFront CDN for distributing web application
+    Type: String
 
 Conditions:
   DefaultRegion: !Equals [!Ref "AWS::Region", "us-east-1"]
@@ -183,7 +186,7 @@ Resources:
                 - aws s3 cp --recursive ./build s3://${S3BucketWeb}/ 
                 - aws s3 cp --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/service-worker.js s3://${S3BucketWeb}/
                 - aws s3 cp --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/index.html s3://${S3BucketWeb}/
-                - aws cloudfront create-invalidation --distribution-id ${AssetsCDN} --paths /index.html /service-worker.js
+                - aws cloudfront create-invalidation --distribution-id ${WebsiteCDN} --paths /index.html /service-worker.js
           artifacts:
             files:
               - '**/*'

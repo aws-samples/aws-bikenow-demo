@@ -107,6 +107,7 @@ Resources:
         CognitoUserPool: !GetAtt ApplicationDatabase.Outputs.CognitoUserPoolId
         CognitoUserPoolClient: !GetAtt ApplicationDatabase.Outputs.CognitoAppClientId
         CognityIdentityPool: !GetAtt ApplicationDatabase.Outputs.CognityIdentityPoolId
+        WebsiteCDN: !GetAtt ApplicationDatabase.Outputs.WebsiteCDN
 
 Outputs:
   BikenowApiUrl:
