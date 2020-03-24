@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Template to create AWS BikeNow demo
+Parameters:
+  EnvironmentName:
+    Description: Environment stage name
+    Type: String
+    Default: demo
+  BikeStationStatusUrl:
+    Description: URL for retrieving Citi Bike station data
+    Type: String
+    Default: https://gbfs.citibikenyc.com/gbfs/en/station_status.json
+  BikeStationDetailUrl:
+    Description: URL for retrieving Citi Bike station meta data
+    Type: String
+    Default: https://gbfs.citibikenyc.com/gbfs/en/station_information.json
+  StationStatusTable:
+    Description: DynamoDB table name where we store bike station status
+    Type: String
+    Default: station_status
+  StationDetailTable:
+    Description: DynamoDB table name where we store bike station details
+    Type: String
+    Default: station_detail
+  ElasticsearchDomainName:
+    Description: Amazon Elasticsearch domain name
+    Type: String
+    Default: bikenow
+  GlueDatabaseName:
+    Description: Name of AWS Glue database
+    Type: String
+    Default: bikenow_db
+  RedshiftDbName:
+    Description: Name of Redshift database
+    Type: String
+    Default: bikenowdw
+  AuroraDbName:
+    Description: Name of Amazon Aurora database
+    Type: String
+    Default: bikenowrds
+  
+Resources:
+  # -------------------------------- INITIALIZE AND COPY ARTIFACTS
+  ApplicationInitialize: 
+   Type: AWS::Serverless::Application
+   DependsOn:
+   - ApplicationTransformUuid
+   Properties: 
+     Location: templates/setup-template.yaml
+
+  # -------------------------------- NETWORK STACK
+  ApplicationNetwork: 
+    Type: AWS::Serverless::Application
+    Properties: 
+      Location: templates/network-template.yaml
+
+  # -------------------------------- DATABASE STACK
+  ApplicationDatabase:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: templates/database-template.yaml
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        BikeStationStatusUrl: !Ref BikeStationStatusUrl
+        BikeStationDetailUrl: !Ref BikeStationDetailUrl
+        StationStatusTable: !Ref StationStatusTable
+        StationDetailTable: !Ref StationDetailTable
+        ElasticsearchDomainName: !Ref ElasticsearchDomainName
+        VpcId: !GetAtt ApplicationNetwork.Outputs.VPC
+        SubnetsPrivate: !GetAtt ApplicationNetwork.Outputs.SubnetsPrivate
+        AuroraDbName: !Ref AuroraDbName
+
+  # -------------------------------- ANALYTICS STACK
+  ApplicationAnalytics:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: templates/analytics-template.yaml
+      Parameters:
+        GlueDatabaseName: !Ref GlueDatabaseName
+        StationStatusStreamArn: !GetAtt ApplicationDatabase.Outputs.StreamTableStationStatusArn
+        StationDetailStreamArn: !GetAtt ApplicationDatabase.Outputs.StreamTableStationDetailArn
+        RedshiftVPC: !GetAtt ApplicationNetwork.Outputs.VPC
+        RedshiftSubnets: !GetAtt ApplicationNetwork.Outputs.SubnetsPrivate
+        RedshiftAZ: !GetAtt ApplicationNetwork.Outputs.AZA
+        RedshiftDbName: !Ref RedshiftDbName
+        ArtifactsBucket: !GetAtt ApplicationInitialize.Outputs.ArtifactsBucket
+
+  # -------------------------------- AI/ML STACK
+  ApplicationAIML:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: templates/aiml-template.yaml
+      Parameters:
+        ArtifactsBucket: !GetAtt ApplicationInitialize.Outputs.ArtifactsBucket
+        DataLakeS3Bucket: !GetAtt ApplicationAnalytics.Outputs.DataLakeS3Bucket
+        GlueEndpointName: !GetAtt ApplicationAnalytics.Outputs.GlueEndpointName
+        EnvironmentName: !Ref EnvironmentName
+
+  # -------------------------------- CODE PIPELINE STACK
+  ApplicationCodeBuild:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: templates/codebuild-template.yaml
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        S3BucketWeb: !GetAtt ApplicationDatabase.Outputs.S3BucketWeb
+        ApiDatabase: !GetAtt ApplicationDatabase.Outputs.ApiGatewayWebId
+        ApiAiml: !GetAtt ApplicationAIML.Outputs.ApiGatewayModelId
+        CognitoUserPool: !GetAtt ApplicationDatabase.Outputs.CognitoUserPoolId
+        CognitoUserPoolClient: !GetAtt ApplicationDatabase.Outputs.CognitoAppClientId
+        CognityIdentityPool: !GetAtt ApplicationDatabase.Outputs.CognityIdentityPoolId
+
+Outputs:
+  BikenowApiUrl:
+    Value: !Sub 'https://${ApplicationDatabase.Outputs.ApiGatewayWebId}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
+    Description: URL of BikeNow purpose-built database demo API Gateway
+  AimlApiUrl:
+    Value: !Sub 'https://${ApplicationAIML.Outputs.ApiGatewayModelId}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
+    Description: URL of BikeNow AI/ML demo API Gateway
+  CognitoUserPoolId:
+    Value: !GetAtt ApplicationDatabase.Outputs.CognitoUserPoolId
+    Description: Cognito user pool ID
+  CognitoAppClientId:
+    Value: !GetAtt ApplicationDatabase.Outputs.CognitoAppClientId
+    Description: Cognito application client ID
+  CognityIdentityPoolId:
+    Value: !GetAtt ApplicationDatabase.Outputs.CognityIdentityPoolId
+    Description: Cognity identity pool ID
+  WebsiteURL:
+    Value: !GetAtt ApplicationDatabase.Outputs.WebsiteURL
+    Description: The URL for the web application

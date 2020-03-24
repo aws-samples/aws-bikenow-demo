@@ -1,13 +1,5 @@
-## My Project
+# AWS BikeNow Demo
+AWS BikeNow Demo is a sample web application that demonstrates the breadth and depth of database, analytics, and AI/ML services on AWS. The application was built on top of the [AWS Full-Stack Template](https://github.com/awslabs/aws-full-stack-template).
 
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
-
-## License
-
-This library is licensed under the MIT-0 License. See the LICENSE file.
-
+## Overview
+The goal of the AWS BikeNow Demo is to help users understand the breadth and depth of the AWS database and analytics portfolio. AWS offers the broadest and deepest portfolio of purpose-built, fully managed database services as well as the most comprehensive, secure, scalable, and cost-effective portfolio of analytics services. With AWS BikeNow Demo, developers can use AWS database and analytics services to manage data through the entirety of its lifecycle, from ingestion, storage, feature engineering, visualization, and analysis in support of data-driven innovation.

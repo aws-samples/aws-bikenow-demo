@@ -1,0 +1,213 @@
+@import url('https://unpkg.com/leaflet@1.6.0/dist/leaflet.css');
+
+.Home .lander {
+  padding: 80px 0;
+  text-align: center;
+}
+
+.Home .lander h1 {
+  font-family: "Open Sans", sans-serif;
+  font-weight: 600;
+}
+
+.Home .lander p {
+  color: white;
+}
+
+.Home .goals h4 {
+  font-family: "Open Sans", sans-serif;
+  font-weight: 600;
+  overflow: hidden;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.Home .goals table {
+  margin-top: 30px;
+  color: white;
+  table-layout: fixed;
+}
+
+.Home .goals table a {
+  color: #4eacf9;
+}
+
+.list-group {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.list-group-item h4 {
+  font-size: 24px;
+  font-weight: 100 !important;
+}
+
+.list-group-item-text {
+  font-weight: 100 !important;
+  font-size: 18px !important;
+  padding-left: 30px;
+}
+
+.list-group-item-heading {
+  font-weight: 200 !important;
+  font-size: 24px !important;
+  padding-left:30px;
+}
+
+.container-fluid {
+  padding-right: 0 !important;
+}
+
+.description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orange-link {
+  color: #ff9900 !important;
+}
+
+.center-spinner {
+  position: absolute;
+  margin-top: 20px;
+  left: 50%;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 75vh;
+}
+
+.lander-screen {
+  box-shadow: 0 4px 8px 0 rgba(255, 255, 255, 0.5), 0 6px 20px 0 rgba(255, 255, 255, 0.5);
+    margin-top: 12px;
+}
+
+th.popup-title {
+  font-size: 18px;
+  font-weight: bolder;
+  color: #000;
+  padding-bottom: 1em;
+}
+
+td.popup-label {
+  font-weight: bold;
+  color: #000;
+}
+
+td.popup-caption {
+  color: #000
+}
+
+.request-popup .leaflet-popup-content-wrapper {
+  width: 300px;
+}
+
+.btn.uniform-width {
+  width: 85px;
+}
+
+.btn.btn-outline-light.uniform-width {
+  width: 85px;
+}
+
+.card.adv-search-header {
+  border:none;
+}
+
+.card-header:first-child.adv-search-toggle {  
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+  border-bottom-left-radius: 0px;
+  background-color: #252f3d;
+}
+
+.card-header.adv-search-header {
+  padding: 0px;
+  background-color: #252f3d;
+  border: none;
+  cursor: pointer;
+}
+
+.card-header.adv-search-toggle {
+  padding-left: 3px;
+  padding-top: 0px;
+  padding-right: 0px;
+  padding-bottom: 0px;
+}
+
+.card-body.adv-search-body {
+  padding-top: 0px;
+  padding-left: 0px;
+  padding-right: 0px;
+  padding-bottom: 12px;
+  background-color: #252f3d;
+}
+
+i {
+  border: solid white;
+  border-width: 0 3px 3px 0;
+  display: inline-block;
+  padding: 3px;
+}
+
+.arrow-down {
+  transform: rotate(45deg);
+  -webkit-transform: rotate(45deg);
+}
+
+.arrow-up {
+  transform: rotate(-135deg);
+  -webkit-transform: rotate(-135deg);
+}
+
+.react-datepicker-popper {
+  position: static !important;
+  transform: none !important;
+}
+
+.react-datepicker-wrapper {
+  display: block !important;
+}
+
+h5.modal-prompt {
+  padding-bottom: 18px;
+}
+
+.modal-header, .modal-body {
+  color: #212529;
+}
+
+.form-row.form-header {
+  background-color: #ced4da;
+  margin-left: 3px;
+  margin-bottom: 0px;
+}
+
+.form-row > .col {
+  padding-top: 5px;
+}
+
+.form-group.modal-price {
+  margin-top: .375rem;
+}
+
+input {
+  display: block;
+  width: 100%;
+  height: calc(1.5em + 0.75rem + 2px);
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #495057;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  -webkit-transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}

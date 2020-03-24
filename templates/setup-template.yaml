@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Template to initialize and upload artifacts for Bike Demo
+
+Resources:
+  # -------------------------------- ARTIFACTS BUCKET
+  S3BucketArtifacts:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+    DeletionPolicy: Delete
+
+  # -------------------------------- LAMBDA ROLES
+  RoleSetupArtifactsLambda:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SetupArtifactsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !GetAtt S3BucketArtifacts.Arn
+                  - Fn::Join:
+                    - "/"
+                    -
+                      - !GetAtt S3BucketArtifacts.Arn
+                      - "*"
+
+  # -------------------------------- LAMBDA FUNCTIONS
+  LambdaSetupArtifacts:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/setup_upload_artifacts
+      Role: !GetAtt RoleSetupArtifactsLambda.Arn
+      Description: Copy artifacts to S3
+      MemorySize: 128
+      Timeout: 300
+      Environment:
+        Variables:
+          SCRIPT_BUCKET: !Ref S3BucketArtifacts
+          SCRIPT_FOLDER: artifacts
+  LambdaSetupEmptyBucket:
+    Type: AWS::Serverless::Function
+    Properties:
+        Handler: index.lambda_handler
+        Runtime: python3.8
+        CodeUri: ../lambdas/setup_empty_bucket
+        Role: !GetAtt RoleSetupArtifactsLambda.Arn
+        Description: Empty artifacts bucket upon deletion
+        MemorySize: 128
+        Timeout: 300
+        Environment:
+          Variables:
+            SCRIPT_BUCKET: !Ref S3BucketArtifacts
+
+  # -------------------------------- CUSTOM SETUP RESOURCES
+  SetupUploadArtifacts:
+    Type: Custom::SetupFunction
+    DependsOn:
+      - S3BucketArtifacts
+      - RoleSetupArtifactsLambda
+      - LambdaSetupArtifacts
+    Properties:
+      ServiceToken: !GetAtt LambdaSetupArtifacts.Arn
+  SetupEmptyBucket:
+    Type: Custom::SetupFunction
+    DependsOn:
+      - S3BucketArtifacts
+      - RoleSetupArtifactsLambda
+      - LambdaSetupEmptyBucket
+    Properties:
+      ServiceToken: !GetAtt LambdaSetupEmptyBucket.Arn
+
+Outputs:
+  ArtifactsBucket:
+    Value: !Ref S3BucketArtifacts
+    Description: Name of S3 bucket containing artifacts

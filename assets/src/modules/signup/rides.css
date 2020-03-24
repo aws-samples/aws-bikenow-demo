@@ -1,0 +1,19 @@
+@media all and (min-width: 480px) {
+  .Rides {
+    height: 100%;
+    padding: 30px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+a.empty-text {
+  color: #ff9900;
+  text-decoration: none;
+}
+
+a:hover.empty-text {
+  color: #ff9900;
+  text-decoration: underline;
+}

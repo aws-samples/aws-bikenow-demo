@@ -1,0 +1,386 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Template to create BikeNow AI/ML demo
+
+Parameters:
+  ArtifactsBucket:
+    Description: Name of S3 bucket containing artifacts
+    Type: String
+  DataLakeS3Bucket:
+    Description: Name of Data Lake S3 bucket
+    Type: String
+  GlueEndpointName:
+    Description: Name of Glue development endpoint
+    Type: String
+  EnvironmentName:
+    Description: Environment stage name
+    Type: String
+
+Mappings:
+  XGBoostMap:
+    us-east-1:
+      Image: 683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-xgboost:0.90-1-cpu-py3
+    us-east-2: 
+      Image: 257758044811.dkr.ecr.us-east-2.amazonaws.com/sagemaker-xgboost:0.90-1-cpu-py3
+    us-west-2:
+      Image: 246618743249.dkr.ecr.us-west-2.amazonaws.com/sagemaker-xgboost:0.90-1-cpu-py3
+    eu-central-1:
+      Image: 492215442770.dkr.ecr.eu-central-1.amazonaws.com/sagemaker-xgboost:0.90-1-cpu-py3
+    eu-west-1:
+      Image: 141502667606.dkr.ecr.eu-west-1.amazonaws.com/sagemaker-xgboost:0.90-1-cpu-py3
+    eu-west-2:
+      Image: 764974769150.dkr.ecr.eu-west-2.amazonaws.com/sagemaker-xgboost:0.90-1-cpu-py3
+
+Resources:
+  # -------------------------------- SAGEMAKER ROLE
+  RoleSagemakerNotebook:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSGlueConsoleFullAccess
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: SagemakerNotebookPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:ListTags
+                Resource:
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - s3:GetAccountPublicAccessBlock
+                  - s3:ListAllMyBuckets
+                  - s3:HeadBucket
+                Resource: 
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - glue:GetDevEndpoints
+                  - glue:UpdateDevEndpoint
+                  - glue:GetDevEndpoint
+                Resource:
+                  - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:devEndpoint/${GlueEndpointName}*'
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Sub 'arn:aws:s3:::${DataLakeS3Bucket}'
+                  - !Sub 'arn:aws:s3:::${DataLakeS3Bucket}/*'
+                  - !Sub 'arn:aws:s3:::${ArtifactsBucket}'
+                  - !Sub 'arn:aws:s3:::${ArtifactsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::aws-glue-jes-prod-${AWS::Region}-assets*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: 
+                  - arn:aws:iam::*:role/AWSGlueServiceRole
+                Condition:
+                  StringLike:
+                    iam:PassedToService:
+                      - glue.amazonaws.com
+  # -------------------------------- SAGEMAKER NOTEBOOK
+  SagemakerNotebookLifecycleConfig:
+    Type: AWS::SageMaker::NotebookInstanceLifecycleConfig
+    Properties:
+      OnCreate:
+        - Content:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              set -ex
+              [ -e /home/ec2-user/glue_ready ] && exit 0
+
+              mkdir -p /home/ec2-user/glue
+              cd /home/ec2-user/glue
+
+              #GLUE_ENDPOINT and ASSETS must be set by the consumer of this script
+              REGION=$(aws configure get region)
+
+              # Write dev endpoint in a file which will be used by daemon scripts
+              glue_endpoint_file="/home/ec2-user/glue/glue_endpoint.txt"
+
+              if [ -f $glue_endpoint_file ] ; then
+                  rm $glue_endpoint_file
+              fi
+              echo "https://glue.$REGION.amazonaws.com" >> $glue_endpoint_file
+
+              ASSETS=s3://aws-glue-jes-prod-$REGION-assets/sagemaker/assets/
+
+              aws s3 cp $ASSETS . --recursive
+
+              bash "/home/ec2-user/glue/Miniconda2-4.5.12-Linux-x86_64.sh" -b -u -p "/home/ec2-user/glue/miniconda"
+
+              source "/home/ec2-user/glue/miniconda/bin/activate"
+
+              tar -xf autossh-1.4e.tgz
+              cd autossh-1.4e
+              ./configure
+              make
+              sudo make install
+              sudo cp /home/ec2-user/glue/autossh.conf /etc/init/
+
+              mkdir -p /home/ec2-user/.sparkmagic
+              cp /home/ec2-user/glue/config.json /home/ec2-user/.sparkmagic/config.json
+
+              mkdir -p /home/ec2-user/SageMaker/Glue\ Examples
+              mv /home/ec2-user/glue/notebook-samples/* /home/ec2-user/SageMaker/Glue\ Examples/
+
+              # Copy BikeNow demo notebooks
+              ARTIFACTS=s3://${ArtifactsBucket}/artifacts/
+              aws s3 cp $ARTIFACTS . --recursive --exclude "*" --include "*.ipynb"
+              sudo chmod 666 *.ipynb
+              mv *.ipynb /home/ec2-user/SageMaker/
+
+              # Run daemons as cron jobs and use flock make sure that daemons are started only iff stopped
+              (crontab -l; echo "* * * * * /usr/bin/flock -n /tmp/lifecycle-config-v2-dev-endpoint-daemon.lock /usr/bin/sudo /bin/sh /home/ec2-user/glue/lifecycle-config-v2-dev-endpoint-daemon.sh") | crontab -
+
+              (crontab -l; echo "* * * * * /usr/bin/flock -n /tmp/lifecycle-config-reconnect-dev-endpoint-daemon.lock /usr/bin/sudo /bin/sh /home/ec2-user/glue/lifecycle-config-reconnect-dev-endpoint-daemon.sh") | crontab -
+
+              source "/home/ec2-user/glue/miniconda/bin/deactivate"
+
+              rm -rf "/home/ec2-user/glue/Miniconda2-4.5.12-Linux-x86_64.sh"
+
+              sudo touch /home/ec2-user/glue_ready
+      OnStart:
+        - Content:
+            Fn::Base64: !Sub |
+              #!/bin/bash
+              set -ex
+              [ -e /home/ec2-user/glue_ready ] && exit 0
+
+              mkdir -p /home/ec2-user/glue
+              cd /home/ec2-user/glue
+
+              #GLUE_ENDPOINT and ASSETS must be set by the consumer of this script
+              REGION=$(aws configure get region)
+
+              # Write dev endpoint in a file which will be used by daemon scripts
+              glue_endpoint_file="/home/ec2-user/glue/glue_endpoint.txt"
+
+              if [ -f $glue_endpoint_file ] ; then
+                  rm $glue_endpoint_file
+              fi
+              echo "https://glue.$REGION.amazonaws.com" >> $glue_endpoint_file
+
+              ASSETS=s3://aws-glue-jes-prod-$REGION-assets/sagemaker/assets/
+
+              aws s3 cp $ASSETS . --recursive
+
+              bash "/home/ec2-user/glue/Miniconda2-4.5.12-Linux-x86_64.sh" -b -u -p "/home/ec2-user/glue/miniconda"
+
+              source "/home/ec2-user/glue/miniconda/bin/activate"
+
+              tar -xf autossh-1.4e.tgz
+              cd autossh-1.4e
+              ./configure
+              make
+              sudo make install
+              sudo cp /home/ec2-user/glue/autossh.conf /etc/init/
+
+              mkdir -p /home/ec2-user/.sparkmagic
+              cp /home/ec2-user/glue/config.json /home/ec2-user/.sparkmagic/config.json
+
+              mkdir -p /home/ec2-user/SageMaker/Glue\ Examples
+              mv /home/ec2-user/glue/notebook-samples/* /home/ec2-user/SageMaker/Glue\ Examples/
+
+              # Copy BikeNow demo notebooks
+              ARTIFACTS=s3://${ArtifactsBucket}/artifacts/
+              aws s3 cp $ARTIFACTS . --recursive --exclude "*" --include "*.ipynb"
+              sudo chmod 666 *.ipynb
+              mv *.ipynb /home/ec2-user/SageMaker/
+
+              # Run daemons as cron jobs and use flock make sure that daemons are started only iff stopped
+              (crontab -l; echo "* * * * * /usr/bin/flock -n /tmp/lifecycle-config-v2-dev-endpoint-daemon.lock /usr/bin/sudo /bin/sh /home/ec2-user/glue/lifecycle-config-v2-dev-endpoint-daemon.sh") | crontab -
+
+              (crontab -l; echo "* * * * * /usr/bin/flock -n /tmp/lifecycle-config-reconnect-dev-endpoint-daemon.lock /usr/bin/sudo /bin/sh /home/ec2-user/glue/lifecycle-config-reconnect-dev-endpoint-daemon.sh") | crontab -
+
+              source "/home/ec2-user/glue/miniconda/bin/deactivate"
+
+              rm -rf "/home/ec2-user/glue/Miniconda2-4.5.12-Linux-x86_64.sh"
+
+              sudo touch /home/ec2-user/glue_ready
+  SagemakerNotebook:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties:
+      InstanceType: ml.m5.2xlarge
+      VolumeSizeInGB: 20
+      RoleArn: !GetAtt RoleSagemakerNotebook.Arn
+      LifecycleConfigName: !GetAtt SagemakerNotebookLifecycleConfig.NotebookInstanceLifecycleConfigName
+      Tags:
+        - Key: aws-glue-dev-endpoint
+          Value: !Ref GlueEndpointName
+
+  # -------------------------------- SAGEMAKER ENDPOINT
+  BikenowXgboostModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ExecutionRoleArn: !GetAtt RoleSagemakerNotebook.Arn
+      Containers:
+        - ContainerHostname: XGBoostContainer
+          Image: !FindInMap [XGBoostMap, !Ref AWS::Region, Image]
+          ModelDataUrl: !Sub 's3://${ArtifactsBucket}/artifacts/bikenow-xgboost-regression-model.tar.gz'
+  BikenowXgboostEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      ProductionVariants:
+        - VariantName: BikenowXgboostVariant
+          InitialInstanceCount: 1
+          InitialVariantWeight: 1.0
+          InstanceType: ml.m5.xlarge
+          ModelName: !GetAtt BikenowXgboostModel.ModelName
+  BikenowXgboostEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointConfigName: !GetAtt BikenowXgboostEndpointConfig.EndpointConfigName
+
+  # -------------------------------- LAMBDA ROLES
+  RoleInvokeModel:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeModelLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - sagemaker:DescribeEndpoint*
+                  - sagemaker:InvokeEndpoint
+                Resource:
+                  - !Ref BikenowXgboostEndpoint
+
+  # -------------------------------- LAMBDA FUNCTIONS
+  LambdaInvokeModelApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/api_predict_station_status
+      Role: !GetAtt RoleInvokeModel.Arn
+      Description: Invoke Sagemaker model to predict bike availability
+      MemorySize: 256
+      Timeout: 60
+      Environment:
+        Variables:
+          MODEL_ENDPOINT_NAME: !GetAtt BikenowXgboostEndpoint.EndpointName
+  LambdaInvokeModelApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaInvokeModelApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiAiml}/*'
+
+  # -------------------------------- API GATEWAY
+  ApiAiml:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'BikeNow-Aiml-${EnvironmentName}'
+      Description: API Gateway for BikeNow AI/ML demo
+      FailOnWarnings: true
+  StationsApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiAiml
+      ParentId: !GetAtt ApiAiml.RootResourceId
+      PathPart: plan
+  InvokeModelApiRequestPOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+    - LambdaInvokeModelApi
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: POST
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaInvokeModelApi.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      ResourceId: !Ref StationsApiResource
+      RestApiId: !Ref ApiAiml
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+  InvokeModelApiRequestOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref StationsApiResource
+      RestApiId: !Ref ApiAiml
+      AuthorizationType: None
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: >-
+                'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+  APIDeployment:
+    DependsOn:
+      - InvokeModelApiRequestPOST
+      - InvokeModelApiRequestOPTIONS
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      Description: !Sub 'API deployment to ${EnvironmentName}'
+      RestApiId: !Ref ApiAiml
+      StageName: !Ref EnvironmentName
+
+Outputs:
+  ApiGatewayModelId:
+    Value: !Ref ApiAiml
+    Description: API Gateway ID for Sagemaker model endpoint

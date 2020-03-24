@@ -1,0 +1,1074 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Template to create BikeNow purpose-built database demo
+Parameters:
+  EnvironmentName:
+    Description: Environment stage name
+    Type: String
+  BikeStationStatusUrl:
+    Description: URL for retrieving Citi Bike station data
+    Type: String
+  BikeStationDetailUrl:
+    Description: URL for retrieving Citi Bike station details
+    Type: String
+  StationStatusTable:
+    Description: DynamoDB table name where we store bike station status
+    Type: String
+  StationDetailTable:
+    Description: DynamoDB table name where we store bike station details
+    Type: String
+  ElasticsearchDomainName:
+    Description: Amazon Elasticsearch domain name
+    Type: String
+  VpcId:
+    Description: VPC identifier
+    Type: String
+  SubnetsPrivate:
+    Description: Private subnets
+    Type: List<AWS::EC2::Subnet::Id>
+  AuroraDbName:
+    Description: Name of Amazon Aurora database
+    Type: String
+
+Conditions:
+  DefaultRegion: !Equals [!Ref "AWS::Region", "us-east-1"]
+
+Mappings:
+  S3Buckets:
+    us-east-1:
+      Bucket: aws-bikenow-demo-us-east-1
+      SeederFunctionBucket: fsd-aws-wildrydes-us-east-1
+    us-west-2:
+      Bucket: aws-bikenow-demo-us-west-2
+      SeederFunctionBucket: fsd-aws-wildrydes-us-west-2
+    eu-central-1:
+      Bucket: aws-bikenow-demo-eu-central-1
+      SeederFunctionBucket: fsd-aws-wildrydes-eu-central-1
+    eu-west-1:
+      Bucket: aws-bikenow-demo-eu-west-1
+      SeederFunctionBucket: fsd-aws-wildrydes-eu-west-1
+
+Resources:
+  # -------------------------------- SECURITY GROUP
+  SecurityGroupDatabaseStack:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: BikeNow purpose-built database demo
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: '-1'
+  SecurityGroupDatabaseStackIngressHttp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupDatabaseStack
+      SourceSecurityGroupId: !Ref SecurityGroupDatabaseStack
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+  SecurityGroupDatabaseStackIngressHttps:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupDatabaseStack
+      SourceSecurityGroupId: !Ref SecurityGroupDatabaseStack
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+  SecurityGroupDatabaseStackIngressRds:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupDatabaseStack
+      SourceSecurityGroupId: !Ref SecurityGroupDatabaseStack
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+
+  # -------------------------------- LAMBDA ROLES 
+  RoleLoadStationsLambda:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: StationStatusLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:GetItem
+                  - dynamodb:BatchGetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt TableStationStatus.Arn
+                  - !GetAtt TableStationDetail.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeStream
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:ListStreams
+                Resource:
+                  - !GetAtt TableStationStatus.StreamArn
+                  - !GetAtt TableStationDetail.StreamArn
+              - Effect: Allow
+                Action:
+                  - es:ESHttp*
+                Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/bikenow/*'
+  RoleStationReviewsLambda:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StationReviewsLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:GetItem
+                  - dynamodb:BatchGetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt TableStationReview.Arn
+                  - !Sub '${TableStationReview.Arn}/index/*'
+  RoleInvokeApiLambda:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: InvokeApiLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - es:ESHttpGet
+                Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/bikenow/*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref SecretAuroraMaster
+  RoleSetupRdsDdlLambda:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: RoleSetupRdsDdlLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource:
+                  - arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref SecretAuroraMaster
+              - Effect: Allow
+                Action:
+                  - rds:Describe*
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !GetAtt S3BucketWeb.Arn
+                  - Fn::Join:
+                    - "/"
+                    -
+                      - !GetAtt S3BucketWeb.Arn
+                      - "*"
+
+  # -------------------------------- LAMBDA FUNCTIONS 
+  LambdaLoadStationStatus:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/load_station_status_to_ddb
+      Role: !GetAtt RoleLoadStationsLambda.Arn
+      Description: Load bike station status and write to DynamoDB
+      MemorySize: 256
+      Timeout: 60
+      Environment:
+        Variables:
+          STATION_STATUS_URL: !Ref BikeStationStatusUrl
+          STATION_STATUS_TABLE: !Ref StationStatusTable
+      Events:
+        ScheduleEvent:
+          Type: Schedule
+          Properties:
+            Description: Schedule event to load bike station status
+            Schedule: rate(10 minutes)
+  LambdaLoadStationDetail:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/load_station_detail_to_ddb
+      Role: !GetAtt RoleLoadStationsLambda.Arn
+      Description: Load bike station detail and write to DynamoDB
+      MemorySize: 256
+      Timeout: 60
+      Environment:
+        Variables:
+          STATION_DETAIL_URL: !Ref BikeStationDetailUrl
+          STATION_DETAIL_TABLE: !Ref StationDetailTable
+      Events:
+        ScheduleEvent:
+          Type: Schedule
+          Properties:
+            Description: Schedule event to load bike station status
+            Schedule: rate(10 minutes)
+  LambdaLoadStationStatusToES:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/stream_station_status_to_es
+      Role: !GetAtt RoleLoadStationsLambda.Arn
+      Description: Update bike station history in Elasticsearch
+      MemorySize: 256
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+        - !Ref SecurityGroupDatabaseStack
+        SubnetIds: !Ref SubnetsPrivate
+      Environment:
+        Variables:
+          ES_ENDPOINT: !GetAtt DomainStationSearch.DomainEndpoint
+          REGION: !Ref AWS::Region
+      Events:
+        StationStatusEvent:
+          Type: DynamoDB
+          Properties:
+            StartingPosition: LATEST
+            Stream: !GetAtt TableStationStatus.StreamArn
+        StationDetailEvent:
+          Type: DynamoDB
+          Properties:
+            StartingPosition: LATEST
+            Stream: !GetAtt TableStationDetail.StreamArn
+  LambdaSearchStationsApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/api_search_stations
+      Role: !GetAtt RoleInvokeApiLambda.Arn
+      Description: Search bike stations from Elasticsearch
+      MemorySize: 512
+      Timeout: 5
+      VpcConfig:
+        SecurityGroupIds:
+        - !Ref SecurityGroupDatabaseStack
+        SubnetIds: !Ref SubnetsPrivate
+      Environment:
+        Variables:
+          ES_ENDPOINT: !GetAtt DomainStationSearch.DomainEndpoint
+          REGION: !Ref AWS::Region
+  LambdaGetRidesApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/api_get_rides
+      Role: !GetAtt RoleInvokeApiLambda.Arn
+      Description: Get ride transactions from RDS
+      MemorySize: 512
+      Timeout: 10
+      VpcConfig:
+        SecurityGroupIds:
+        - !Ref SecurityGroupDatabaseStack
+        SubnetIds: !Ref SubnetsPrivate
+      Environment:
+        Variables:
+          DB_CREDS: !Ref SecretAuroraMaster
+          DB_NAME: !Ref AuroraCluster
+  LambdaPostRidesApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/api_post_rides
+      Role: !GetAtt RoleInvokeApiLambda.Arn
+      Description: Create ride transaction in RDS
+      MemorySize: 512
+      Timeout: 10
+      VpcConfig:
+        SecurityGroupIds:
+        - !Ref SecurityGroupDatabaseStack
+        SubnetIds: !Ref SubnetsPrivate
+      Environment:
+        Variables:
+          DB_CREDS: !Ref SecretAuroraMaster
+          DB_NAME: !Ref AuroraCluster
+  LambdaPostReviewsApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/api_post_reviews
+      Role: !GetAtt RoleStationReviewsLambda.Arn
+      Description: Create station review in DynamoDB
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          STATION_REVIEW_TABLE: !Ref TableStationReview
+  LambdaGetReviewsApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/api_get_reviews
+      Role: !GetAtt RoleStationReviewsLambda.Arn
+      Description: Get station reviews from DynamoDB
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          STATION_REVIEW_TABLE: !Ref TableStationReview
+          STATION_REVIEW_GSI: user_id_gsi
+  LambdaSetupRdsDdl:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/setup_rds_ddl
+      Role: !GetAtt RoleSetupRdsDdlLambda.Arn
+      Description: Deploy DDL scripts to Aurora
+      MemorySize: 128
+      Timeout: 600
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SecurityGroupDatabaseStack
+        SubnetIds: !Ref SubnetsPrivate
+      Environment:
+        Variables:
+          DB_CREDS: !Ref SecretAuroraMaster
+          DB_NAME: !Ref AuroraCluster
+          DB_INSTANCE: !Ref AuroraDbInstance
+  LambdaSetupEmptyBucket:
+    Type: AWS::Serverless::Function
+    Properties:
+        Handler: index.lambda_handler
+        Runtime: python3.8
+        CodeUri: ../lambdas/setup_empty_bucket
+        Role: !GetAtt RoleSetupRdsDdlLambda.Arn
+        Description: Empty web app bucket upon deletion
+        MemorySize: 128
+        Timeout: 300
+        Environment:
+          Variables:
+            SCRIPT_BUCKET: !Ref S3BucketWeb
+  LambdaSearchStationsApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaSearchStationsApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiDatabase}/*'
+  LambdaGetRidesApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaGetRidesApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiDatabase}/*'
+  LambdaPostRidesApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaPostRidesApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiDatabase}/*'
+  LambdaGetReviewsApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaGetReviewsApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiDatabase}/*'
+  LambdaPostReviewsApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaPostReviewsApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiDatabase}/*'
+
+  # -------------------------------- AURORA SECRETS
+  SecretAuroraMaster:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Manage secret for Aurora cluster master user
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "master"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: "\"@'/\\"
+  SecretAttachAuroraMaster:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      TargetType: AWS::RDS::DBCluster
+      SecretId: !Ref SecretAuroraMaster
+      TargetId: !Ref AuroraCluster
+
+  # -------------------------------- RDS AURORA
+  AuroraSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: Subnet for Aurora Database
+      SubnetIds: !Ref SubnetsPrivate
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DatabaseName: !Ref AuroraDbName
+      Engine: aurora
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref SecretAuroraMaster, ':SecretString:username}}']]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref SecretAuroraMaster, ':SecretString:password}}']]
+      PreferredBackupWindow: 01:00-02:00
+      PreferredMaintenanceWindow: mon:03:00-mon:04:00
+      DBSubnetGroupName: !Ref AuroraSubnetGroup
+      VpcSecurityGroupIds: 
+       - !Ref SecurityGroupDatabaseStack
+  AuroraDbInstance:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceClass: db.t2.small
+      Engine: aurora
+      DBSubnetGroupName: !Ref AuroraSubnetGroup
+
+  # -------------------------------- DYNAMODB TABLES
+  TableStationStatus:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref StationStatusTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: station_id
+          AttributeType: N
+      KeySchema:
+        - AttributeName: station_id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  TableStationDetail:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref StationDetailTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: station_id
+          AttributeType: N
+      KeySchema:
+        - AttributeName: station_id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  TableStationReview:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: station_review
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: station_id
+          AttributeType: N
+        - AttributeName: create_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: station_id
+          KeyType: HASH
+        - AttributeName: create_date
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        -
+          IndexName: user_id_gsi
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: create_date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # -------------------------------- ELASTICSEARCH DOMAIN
+  DomainStationSearch:
+    Type: 'AWS::Elasticsearch::Domain'
+    Properties:
+      DomainName: bikenow
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !GetAtt RoleLoadStationsLambda.Arn
+          Action:
+          - 'es:ESHttp*'
+          Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/bikenow/*'
+        - Effect: Allow
+          Principal:
+            AWS: !GetAtt RoleInvokeApiLambda.Arn
+          Action:
+          - 'es:ESHttpGet'
+          Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/bikenow/*'
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: 20
+        VolumeType: gp2
+      ElasticsearchClusterConfig:
+        InstanceCount: 1
+        InstanceType: t2.medium.elasticsearch
+      ElasticsearchVersion: 7.1
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: 10
+      VPCOptions:
+        SecurityGroupIds:
+        - !Ref SecurityGroupDatabaseStack
+        SubnetIds: 
+        - !Select [0, !Ref SubnetsPrivate]
+    UpdatePolicy:
+      EnableVersionUpgrade: true
+
+  # -------------------------------- API GATEWAY
+  ApiDatabase:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'BikeNow-Db-${EnvironmentName}'
+      Description: API Gateway for BikeNow purpose-built database demo
+      FailOnWarnings: true
+  StationsApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiDatabase
+      ParentId: !GetAtt ApiDatabase.RootResourceId
+      PathPart: stations
+  RidesApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiDatabase
+      ParentId: !GetAtt ApiDatabase.RootResourceId
+      PathPart: rides
+  ReviewsApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiDatabase
+      ParentId: !GetAtt ApiDatabase.RootResourceId
+      PathPart: reviews
+  StationsApiRequestGET:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+    - LambdaSearchStationsApi
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: GET
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaSearchStationsApi.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      ResourceId: !Ref StationsApiResource
+      RestApiId: !Ref ApiDatabase
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+  StationsApiRequestOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref StationsApiResource
+      RestApiId: !Ref ApiDatabase
+      AuthorizationType: None
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: >-
+                'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+  RidesApiRequestGET:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+    - LambdaGetRidesApi
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: GET
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaGetRidesApi.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      ResourceId: !Ref RidesApiResource
+      RestApiId: !Ref ApiDatabase
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+  RidesApiRequestPOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+    - LambdaPostRidesApi
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: POST
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaPostRidesApi.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      ResourceId: !Ref RidesApiResource
+      RestApiId: !Ref ApiDatabase
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+  RidesApiRequestOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref RidesApiResource
+      RestApiId: !Ref ApiDatabase
+      AuthorizationType: None
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: >-
+                'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+  ReviewsApiRequestGET:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+    - LambdaGetReviewsApi
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: GET
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaGetReviewsApi.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      ResourceId: !Ref ReviewsApiResource
+      RestApiId: !Ref ApiDatabase
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+  ReviewsApiRequestPOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+    - LambdaPostReviewsApi
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: POST
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaPostReviewsApi.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      ResourceId: !Ref ReviewsApiResource
+      RestApiId: !Ref ApiDatabase
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+  ReviewsApiRequestOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref ReviewsApiResource
+      RestApiId: !Ref ApiDatabase
+      AuthorizationType: None
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: >-
+                'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+  APIDeployment:
+    DependsOn:
+      - StationsApiRequestGET
+      - StationsApiRequestOPTIONS
+      - RidesApiRequestGET
+      - RidesApiRequestPOST
+      - RidesApiRequestOPTIONS
+      - ReviewsApiRequestGET
+      - ReviewsApiRequestPOST
+      - ReviewsApiRequestOPTIONS
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      Description: !Sub 'API deployment to ${EnvironmentName}'
+      RestApiId: !Ref ApiDatabase
+      StageName: !Ref EnvironmentName
+
+  # -------------------------------- COGNITO STUFF
+  RoleCognitoSNS:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cognito-idp.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CognitoSNSPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'sns:publish'
+                Resource: '*'
+  UserPool:
+    Type: 'AWS::Cognito::UserPool'
+    Properties:
+      UserPoolName: !Sub 'bn-${EnvironmentName}'
+      UsernameAttributes:
+        - email
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+        InviteMessageTemplate:
+          EmailMessage: 'Your username is {username} and temporary password is {####}. '
+          EmailSubject: Your temporary password
+          SMSMessage: 'Your username is {username} and temporary password is {####}.'
+        UnusedAccountValidityDays: 7
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+          RequireUppercase: false
+      AutoVerifiedAttributes:
+        - email
+      EmailVerificationMessage: 'Here is your verification code: {####}'
+      EmailVerificationSubject: Your verification code
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+  UserPoolClient:
+    Type: 'AWS::Cognito::UserPoolClient'
+    Properties:
+      ClientName: !Sub 'bikenow-${EnvironmentName}'
+      GenerateSecret: false
+      UserPoolId: !Ref UserPool
+  IdentityPool:
+    Type: 'AWS::Cognito::IdentityPool'
+    Properties:
+      IdentityPoolName: !Sub 'bn-${EnvironmentName}Identity'
+      AllowUnauthenticatedIdentities: true
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt 
+            - UserPool
+            - ProviderName
+  CognitoUnAuthorizedRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                'cognito-identity.amazonaws.com:aud': !Ref IdentityPool
+              'ForAnyValue:StringLike':
+                'cognito-identity.amazonaws.com:amr': unauthenticated
+      Policies:
+        - PolicyName: CognitoUnauthorizedPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'mobileanalytics:PutEvents'
+                  - 'cognito-sync:*'
+                Resource: '*'
+  CognitoAuthorizedRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                'cognito-identity.amazonaws.com:aud': !Ref IdentityPool
+              'ForAnyValue:StringLike':
+                'cognito-identity.amazonaws.com:amr': authenticated
+      Policies:
+        - PolicyName: CognitoAuthorizedPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'mobileanalytics:PutEvents'
+                  - 'cognito-sync:*'
+                  - 'cognito-identity:*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'execute-api:Invoke'
+                Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*'
+  IdentityPoolRoleMapping:
+    Type: 'AWS::Cognito::IdentityPoolRoleAttachment'
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt 
+          - CognitoAuthorizedRole
+          - Arn
+        unauthenticated: !GetAtt 
+          - CognitoUnAuthorizedRole
+          - Arn
+
+  # -------------------------------- SETUP
+  SetupAuroraDdl:
+    Type: Custom::SetupFunction
+    DependsOn:
+      - AuroraCluster
+      - AuroraDbInstance
+      - RoleSetupRdsDdlLambda
+      - LambdaSetupRdsDdl
+    Properties:
+      SchemaVersion: 1.1 # Change this to force update
+      ServiceToken: !GetAtt LambdaSetupRdsDdl.Arn
+  SetupEmptyBucket:
+    Type: Custom::SetupFunction
+    DependsOn:
+      - S3BucketWeb
+      - RoleSetupRdsDdlLambda
+      - LambdaSetupEmptyBucket
+    Properties:
+      ServiceToken: !GetAtt LambdaSetupEmptyBucket.Arn
+
+  # -------------------------------- WEB FRONT END
+  S3BucketWeb:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      MetricsConfigurations:
+        - Id: EntireBucket
+      WebsiteConfiguration:
+        IndexDocument: index.html
+    # DeletionPolicy: Retain
+  S3BucketWebPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: 
+      - S3BucketWebOriginAccessIdentity
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal:
+              AWS: !Sub
+                arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity
+                ${S3BucketWebOriginAccessIdentity}
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${S3BucketWeb}/*'
+      Bucket: !Ref S3BucketWeb
+  S3BucketWebOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OriginAccessIdentity for ${S3BucketWeb}'
+  S3BucketWebDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - S3BucketWebOriginAccessIdentity
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'CloudFront CDN for ${S3BucketWeb}'
+        DefaultRootObject: index.html
+        Origins:
+          - DomainName: !Join
+            - ''
+            - - !Sub '${S3BucketWeb}.s3'
+              - !If [DefaultRegion, '', !Sub '-${AWS::Region}']
+              - !Sub '.${AWS::URLSuffix}'
+            Id: !Sub '${AWS::StackName}.${S3BucketWeb}'
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${S3BucketWebOriginAccessIdentity}'
+        DefaultCacheBehavior:
+          TargetOriginId: !Sub '${AWS::StackName}.${S3BucketWeb}'
+          ViewerProtocolPolicy: https-only
+          ForwardedValues:
+            QueryString: false
+
+Outputs:
+  StreamTableStationStatusArn:
+    Value: !GetAtt TableStationStatus.StreamArn
+    Description: ARN of DynamoDB stream from table containing bike station status
+  StreamTableStationDetailArn:
+    Value: !GetAtt TableStationDetail.StreamArn
+    Description: ARN of DynamoDB stream from table containing bike station detail
+  ApiGatewayWebId:
+    Value: !Ref ApiDatabase
+    Description: API Gateway ID for web application
+  CognitoUserPoolId:
+    Value: !Ref UserPool
+    Description: Cognito user pool ID
+  CognitoAppClientId:
+    Value: !Ref UserPoolClient
+    Description: Cognito application client ID
+  CognityIdentityPoolId:
+    Value: !Ref IdentityPool
+    Description: Cognity identity pool ID
+  S3BucketWeb: 
+    Value: !Ref S3BucketWeb
+    Description: S3 bucket name hosting web application
+  WebsiteURL:
+    Description: The URL for the web application
+    Value: !Sub 
+      - 'https://${Domain}'
+      - Domain: !GetAtt S3BucketWebDistribution.DomainName
