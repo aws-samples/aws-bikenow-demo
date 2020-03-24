@@ -43,8 +43,6 @@ Resources:
   # -------------------------------- INITIALIZE AND COPY ARTIFACTS
   ApplicationInitialize: 
    Type: AWS::Serverless::Application
-   DependsOn:
-   - ApplicationTransformUuid
    Properties: 
      Location: templates/setup-template.yaml
 
