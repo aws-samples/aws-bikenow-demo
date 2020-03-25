@@ -277,7 +277,7 @@ Resources:
           USER_POOL_ID: !Ref CognitoUserPool
           APP_CLIENT_ID: !Ref CognitoUserPoolClient
           IDENTITY_POOL_ID: !Ref CognityIdentityPool
-    Type: 'AWS::Lambda::Function'
+    Type: AWS::Serverless::Function
     DependsOn:
       - AssetsCodeRepository
       - SeederFunction
