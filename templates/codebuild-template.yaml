@@ -269,8 +269,8 @@ Resources:
       Timeout: 300
       Environment:
         Variables:
-          DB_API_URL: !Sub 'https://${ApiDatabase}.execute-api.${AWS::Region}.amazonaws.com/{EnvironmentName}'
-          ML_API_URL: !Sub 'https://${ApiAiml}.execute-api.${AWS::Region}.amazonaws.com/{EnvironmentName}'
+          DB_API_URL: !Sub 'https://${ApiDatabase}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
+          ML_API_URL: !Sub 'https://${ApiAiml}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
           BRANCH_NAME: master
           REGION: !Ref 'AWS::Region'
           REPOSITORY_NAME: Bikenow-WebAssets
