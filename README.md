@@ -5,7 +5,7 @@ AWS BikeNow Demo is a sample web application that demonstrates the breadth and d
 The goal of the AWS BikeNow Demo is to help users understand the breadth and depth of the AWS database and analytics portfolio. AWS offers the broadest and deepest portfolio of purpose-built, fully managed database services as well as the most comprehensive, secure, scalable, and cost-effective portfolio of analytics services. With AWS BikeNow Demo, developers can use AWS database and analytics services to manage data through the entirety of its lifecycle, from ingestion, storage, feature engineering, visualization, and analysis in support of data-driven innovation.
 
 ## Instructions
-The AWS BikeNow Demo is only available in the following AWS Regions: us-east-1 (N. Virginia), us-west-2 (Oregon), eu-central-1 (Frankfurt), and eu-west-1 (Ireland).
+The AWS BikeNow Demo is only available in the following AWS Regions: us-east-1 (N. Virginia) and us-west-2 (Oregon).
 
 ### Pre-requisites
 * [Create and Activate AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
@@ -20,10 +20,8 @@ To get AWS BikeNow Demo running in your AWS account, follow these steps:
 
 Region name | Region code | Launch
 --- | --- | ---
-US East (N. Virginia) | us-east-1 | [![Launch Stack](https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=BikenowDemo&templateURL=https://s3.amazonaws.com/aws-bikenow-demo-us-east-1/master.yaml) 
-US West (Oregon) |	us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=BikenowDemo&templateURL=https://s3.amazonaws.com/aws-bikenow-demo-us-west-2/master.yaml) 
-EU (Ireland) |	eu-west-1 | [![Launch Stack](https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg)](https://console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/new?stackName=BikenowDemo&templateURL=https://s3.amazonaws.com/aws-bikenow-demo-eu-west-1/master.yaml) 
-EU (Frankfurt) |	eu-central-1 | [![Launch Stack](https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg)](https://console.aws.amazon.com/cloudformation/home?region=eu-central-1#/stacks/new?stackName=BikenowDemo&templateURL=https://s3.amazonaws.com/aws-bikenow-demo-eu-central-1/master.yaml)
+US East (N. Virginia) | us-east-1 | [![Launch Stack](https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=BikenowDemo&templateURL=https://s3.amazonaws.com/aws-bikenow-demo-us-east-1/master.yaml)
+US West (Oregon) | us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=BikenowDemo&templateURL=https://s3.amazonaws.com/aws-bikenow-demo-us-west-2/master.yaml)
 
 3. From the Cloudformation Create stack page, choose **Next**.
 4. You can use the default stack name and parameter values. Choose **Next**.
