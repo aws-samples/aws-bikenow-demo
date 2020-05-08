@@ -52,18 +52,11 @@ class App extends Component<AppProps, AppState> {
     this.props.history.push("/login");
   }
 
-  handleRides() {
-    alert('Not Yet Implemented.');
-  }
-
-  handleReviews() {
-    alert('Not Yet Implemented.');
-  }
-
   showLoggedInBar = () => (
     <Form inline>
       <Button variant="outline-light" href="/rides" className="mr-sm-2 uniform-width">Rides</Button>
       <Button variant="outline-light" href="/reviews" className="mr-sm-2 uniform-width">Reviews</Button>
+      {/* <Button variant="outline-light" href="/report" className="mr-sm-2 uniform-width">Report</Button> */}
       <Button variant="outline-light" onClick={this.handleLogout} className="uniform-width">Log out</Button>
     </Form>
   );

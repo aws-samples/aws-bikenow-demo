@@ -1,0 +1,9 @@
+@media all and (min-width: 480px) {
+  .Reports {
+    height: 100%;
+    padding: 30px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}

@@ -6,6 +6,7 @@ import Login from "./modules/signup/Login";
 import Signup from "./modules/signup/Signup";
 import Rides from "./modules/signup/Rides";
 import Reviews from "./modules/signup/Reviews";
+import Report from "./modules/report/Report";
 import NotFound from "./modules/notFound/NotFound";
 
 interface RouteProps {
@@ -20,5 +21,6 @@ export const Routes: React.SFC<RouteProps> = (childProps) =>
     <PropsRoute path="/signup" exact component={Signup} props={childProps} />
     <PropsRoute path="/rides" exact component={Rides} props={childProps} />
     <PropsRoute path="/reviews" exact component={Reviews} props={childProps} />
+    <PropsRoute path="/report" exact component={Report} props={childProps} />
     <Route component={NotFound} />
   </Switch>;
