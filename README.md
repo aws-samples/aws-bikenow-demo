@@ -37,6 +37,10 @@ US West (Oregon) | us-west-2 | [![Launch Stack](https://cdn.rawgit.com/buildkite
 *Note: given that this is a demo application, we highly suggest that you do not use an email and password combination that you use for other purposes (such as an AWS account, email, or e-commerce site).*
     3. Once you provide your credentials, you will receive a verification code at the email address you provided. Upon entering this verification code, you will be signed into the application.
 
+### Embed a QuickSight Dashboard (Optional)
+
+Follow the [QuickSight tutorial](quicksight/) to embed a QuickSight dashboard in the application.
+
 ### Cleaning up
 
 To tear down your application and remove all resources associated with the AWS BikeNow Demo, follow these steps:
@@ -86,3 +90,11 @@ Amazon SageMaker Notebooks are used to perform analysis on the data in S3 and th
 ### Developer Tools
 
 The code is hosted in AWS CodeCommit. AWS CodePipeline builds the web application using AWS CodeBuild. After successfully building, CodeBuild copies the build artifacts into a S3 bucket where the web application assets are maintained. Along with uploading to Amazon S3, CodeBuild invalidates the cache so users always see the latest experience when accessing the storefront through the Amazon CloudFront distribution. AWS CodeCommit. AWS CodePipeline, and AWS CodeBuild are used in the deployment and update processes only, not while the application is in a steady-state of use.
+
+## Conclusion
+
+AWS offers the broadest and deepest portfolio of purpose-built, fully managed database and analytics services. AWS BikeNow Demo showcases how AWS enables us to build data-driven applications and turn data into insights.
+
+For more information on AWS database and analytics services, see:
+* [Databases on AWS](https://aws.amazon.com/products/databases/)
+* [Data Lakes and Analytics on AWS](https://aws.amazon.com/big-data/datalakes-and-analytics/)

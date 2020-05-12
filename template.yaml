@@ -128,3 +128,12 @@ Outputs:
   WebsiteURL:
     Value: !GetAtt ApplicationDatabase.Outputs.WebsiteURL
     Description: The URL for the web application
+  PrivateSubnet:
+    Value: !GetAtt ApplicationNetwork.Outputs.SubnetAPrivate
+    Description: Private subnet
+  RedshiftSecurityGroup:
+    Value: !GetAtt ApplicationAnalytics.Outputs.RedshiftSecurityGroup
+    Description: Security Group for Redshift cluster
+  DbSecurityGroup:
+    Value: !GetAtt ApplicationDatabase.Outputs.DbSecurityGroup
+    Description: Security Group for Aurora database

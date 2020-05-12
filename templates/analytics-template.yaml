@@ -616,20 +616,6 @@ Resources:
                 Resource: !Ref SecretRedshiftMaster
 
   # -------------------------------- GLUE JOB
-  CrawlerStationHistory:
-    Type: AWS::Glue::Crawler
-    Properties:
-      DatabaseName: !Ref GlueDbDataLake
-      Description: Crawler to update partitions and statistics in Bike Demo database
-      Role: !GetAtt RoleGlueDbCrawler.Arn
-      SchemaChangePolicy:
-        DeleteBehavior: LOG
-        UpdateBehavior: LOG
-      Targets:
-        CatalogTargets:
-          - DatabaseName: !Ref GlueDbDataLake
-            Tables:
-              - !Ref GlueTableStationHistory
   JobLoadStationDetail:
     Type: AWS::Glue::Job
     Properties:
@@ -738,12 +724,6 @@ Outputs:
   GlueEndpointName:
     Value: !Ref GlueEndpoint
     Description: Name of Glue development endpoint
-#   GlueCrawlerRoleArn:
-#     Value: !GetAtt RoleGlueDbCrawler.Arn
-#     Description: ARN for Glue crawler role
-#   StationHistoryCrawler:
-#     Value: !Ref CrawlerStationHistory
-#     Description: Name of Glue crawler on station history data
-#   FirehoseStationsES:
-#     Value: !Ref FirehoseStationsES
-#     Description: Firehose to populate Station Elastic Search in RDSApp 
+  RedshiftSecurityGroup:
+    Value: !Ref SGroupRedshift
+    Description: Security Group for Redshift cluster

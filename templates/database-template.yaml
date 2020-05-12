@@ -33,21 +33,6 @@ Parameters:
 Conditions:
   DefaultRegion: !Equals [!Ref "AWS::Region", "us-east-1"]
 
-Mappings:
-  S3Buckets:
-    us-east-1:
-      Bucket: aws-bikenow-demo-us-east-1
-      SeederFunctionBucket: fsd-aws-wildrydes-us-east-1
-    us-west-2:
-      Bucket: aws-bikenow-demo-us-west-2
-      SeederFunctionBucket: fsd-aws-wildrydes-us-west-2
-    eu-central-1:
-      Bucket: aws-bikenow-demo-eu-central-1
-      SeederFunctionBucket: fsd-aws-wildrydes-eu-central-1
-    eu-west-1:
-      Bucket: aws-bikenow-demo-eu-west-1
-      SeederFunctionBucket: fsd-aws-wildrydes-eu-west-1
-
 Resources:
   # -------------------------------- SECURITY GROUP
   SecurityGroupDatabaseStack:
@@ -185,6 +170,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonCognitoReadOnly
       Policies:
         - PolicyName: InvokeApiLambdaPolicy
           PolicyDocument:
@@ -206,6 +192,10 @@ Resources:
                   - secretsmanager:DescribeSecret
                   - secretsmanager:GetSecretValue
                 Resource: !Ref SecretAuroraMaster
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRoleWithWebIdentity
+                Resource: '*'
   RoleSetupRdsDdlLambda:
     Type: AWS::IAM::Role
     Properties:
@@ -404,6 +394,24 @@ Resources:
         Variables:
           STATION_REVIEW_TABLE: !Ref TableStationReview
           STATION_REVIEW_GSI: user_id_gsi
+  LambdaGetEmbeddedQSUrlApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs12.x
+      CodeUri: ../lambdas/api_get_quicksight_url
+      Role: !GetAtt RoleInvokeApiLambda.Arn
+      Description: Get URL for QuickSight embedded URL
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          ACCOUNT_ID: !Ref AWS::AccountId
+          DASHBOARD_ID: '<dashboard-id>'
+          IDENTITY_POOL_ID: !Ref IdentityPool
+          REGION: !Ref AWS::Region
+          ROLE_ARN: !GetAtt CognitoAuthorizedRole.Arn
+          USER_POOL_ID: !Ref UserPool
   LambdaSetupRdsDdl:
     Type: AWS::Serverless::Function
     Properties:
@@ -469,6 +477,13 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LambdaPostReviewsApi
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiDatabase}/*'
+  LambdaGetEmbeddedQSUrlApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaGetEmbeddedQSUrlApi
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiDatabase}/*'
 
@@ -635,6 +650,12 @@ Resources:
       RestApiId: !Ref ApiDatabase
       ParentId: !GetAtt ApiDatabase.RootResourceId
       PathPart: reviews
+  ReportApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiDatabase
+      ParentId: !GetAtt ApiDatabase.RootResourceId
+      PathPart: report
   StationsApiRequestGET:
     Type: AWS::ApiGateway::Method
     DependsOn:
@@ -817,6 +838,54 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
           StatusCode: '200'
+  EmbeddedQSUrlApiRequestGET:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+    - LambdaGetEmbeddedQSUrlApi
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: GET
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaGetEmbeddedQSUrlApi.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      ResourceId: !Ref ReportApiResource
+      RestApiId: !Ref ApiDatabase
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+  EmbeddedQSUrlApiRequestOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId: !Ref ReportApiResource
+      RestApiId: !Ref ApiDatabase
+      AuthorizationType: None
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: >-
+                'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
   APIDeployment:
     DependsOn:
       - StationsApiRequestGET
@@ -827,6 +896,8 @@ Resources:
       - ReviewsApiRequestGET
       - ReviewsApiRequestPOST
       - ReviewsApiRequestOPTIONS
+      - EmbeddedQSUrlApiRequestGET
+      - EmbeddedQSUrlApiRequestOPTIONS
     Type: AWS::ApiGateway::Deployment
     Properties:
       Description: !Sub 'API deployment to ${EnvironmentName}'
@@ -956,6 +1027,11 @@ Resources:
                 Action:
                   - 'execute-api:Invoke'
                 Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*'
+              - Effect: Allow
+                Action:
+                  - 'quicksight:GetDashboardEmbedUrl'
+                  - 'quicksight:RegisterUser'
+                Resource: '*'
   IdentityPoolRoleMapping:
     Type: 'AWS::Cognito::IdentityPoolRoleAttachment'
     Properties:
@@ -1075,3 +1151,6 @@ Outputs:
     Value: !Sub 
       - 'https://${Domain}'
       - Domain: !GetAtt S3BucketWebDistribution.DomainName
+  DbSecurityGroup:
+    Value: !Ref SecurityGroupDatabaseStack
+    Description: Security Group for Aurora database
