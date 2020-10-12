@@ -1128,6 +1128,9 @@ Outputs:
   StreamTableStationDetailArn:
     Value: !GetAtt TableStationDetail.StreamArn
     Description: ARN of DynamoDB stream from table containing bike station detail
+  StreamTableReviewArn:
+    Value: !GetAtt TableStationReview.StreamArn
+    Description: ARN of DynamoDB stream from table containing user reviews
   ApiGatewayWebId:
     Value: !Ref ApiDatabase
     Description: API Gateway ID for web application

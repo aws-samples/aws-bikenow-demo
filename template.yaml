@@ -77,6 +77,7 @@ Resources:
         GlueDatabaseName: !Ref GlueDatabaseName
         StationStatusStreamArn: !GetAtt ApplicationDatabase.Outputs.StreamTableStationStatusArn
         StationDetailStreamArn: !GetAtt ApplicationDatabase.Outputs.StreamTableStationDetailArn
+        StationReviewStreamArn: !GetAtt ApplicationDatabase.Outputs.StreamTableReviewArn
         RedshiftVPC: !GetAtt ApplicationNetwork.Outputs.VPC
         RedshiftSubnets: !GetAtt ApplicationNetwork.Outputs.SubnetsPrivate
         RedshiftAZ: !GetAtt ApplicationNetwork.Outputs.AZA

@@ -11,6 +11,9 @@ Parameters:
   StationDetailStreamArn:
     Description: ARN of DynamoDB stream for bike station detail
     Type: String
+  StationReviewStreamArn:
+    Description: ARN of DynamoDB stream for user reviews
+    Type: String
   RedshiftVPC:
     Description: VPC to launch the Redshift cluster
     Type: AWS::EC2::VPC::Id
@@ -106,6 +109,19 @@ Resources:
         BufferingHints:
           IntervalInSeconds: 60
           SizeInMBs: 1
+  FirehoseReviewDetail:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN: !GetAtt S3BucketDataLake.Arn
+        RoleARN: !GetAtt RoleFirehoseDataLake.Arn
+        Prefix: raw/review_history/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/
+        ErrorOutputPrefix: error/review_history/
+        CompressionFormat: GZIP
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 1
   
   # -------------------------------- LAMBDA ROLES 
   RoleStatusDataLakeLambda:
@@ -141,6 +157,7 @@ Resources:
                 Resource:
                   - !Ref StationStatusStreamArn
                   - !Ref StationDetailStreamArn
+                  - !Ref StationReviewStreamArn
               - Effect: Allow
                 Action:
                   - firehose:DeleteDeliveryStream
@@ -150,6 +167,16 @@ Resources:
                 Resource:
                   - !GetAtt FirehoseStationStatus.Arn
                   - !GetAtt FirehoseStationDetail.Arn
+                  - !GetAtt FirehoseReviewDetail.Arn
+              - Effect: Allow
+                Action:
+                  - comprehend:DetectEntities
+                  - comprehend:DetectKeyPhrases
+                  - comprehend:DetectDominantLanguage
+                  - comprehend:DetectSentiment
+                  - comprehend:DetectSyntax
+                Resource:
+                  - '*'    
   RoleSetupRedshiftDdlLambda:
     Type: AWS::IAM::Role
     Properties:
@@ -226,6 +253,26 @@ Resources:
           Properties:
             StartingPosition: LATEST
             Stream: !Ref StationDetailStreamArn
+  LambdaReviewDataLake:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      CodeUri: ../lambdas/stream_station_review_to_s3
+      Role: !GetAtt RoleStatusDataLakeLambda.Arn
+      Description: Publish latest user reviews to Firehose stream
+      MemorySize: 256
+      Timeout: 900
+      Environment:
+        Variables:
+          FIREHOSE_STREAM_NAME: !Ref FirehoseReviewDetail
+      Events:
+        DynamoDbEvent:
+          Type: DynamoDB
+          Properties:
+            BatchSize: 10
+            StartingPosition: LATEST
+            Stream: !Ref StationReviewStreamArn
   LambdaSetupRedshiftDdl:
     Type: AWS::Serverless::Function
     Properties:
@@ -402,6 +449,60 @@ Resources:
               Name: lat
             - Type: int
               Name: capacity
+  GlueTableReview:
+    Type: AWS::Glue::Table
+    Properties:
+      DatabaseName: !Ref GlueDbDataLake
+      CatalogId: !Ref AWS::AccountId
+      TableInput:
+        Name: station_review_sentiment
+        Description: User reviews of bike stations and sentiment score
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: json
+          typeOfData: file
+          compressionType: gzip
+          EXTERNAL: true
+        PartitionKeys:
+          - Type: string
+            Name: year
+          - Type: string
+            Name: month
+          - Type: string
+            Name: day
+          - Type: string
+            Name: hour
+        StorageDescriptor:
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Location: !Sub 's3://${S3BucketDataLake}/raw/review_history/'
+          StoredAsSubDirectories: true
+          Compressed: true
+          SerdeInfo:
+            SerializationLibrary: org.openx.data.jsonserde.JsonSerDe
+            Parameters:
+              paths: station_name,user_id,review,station_id,create_date,sentiment,sentiment_mixed,sentiment_neutral,sentiment_positive,sentiment_negative
+          Columns:
+            - Type: string
+              Name: station_name
+            - Type: string
+              Name: user_id
+            - Type: string
+              Name: review
+            - Type: int
+              Name: station_id
+            - Type: int
+              Name: create_date
+            - Type: string
+              Name: sentiment
+            - Type: double
+              Name: sentiment_mixed
+            - Type: double
+              Name: sentiment_neutral
+            - Type: double
+              Name: sentiment_positive
+            - Type: double
+              Name: sentiment_negative
   CrawlerStationHistory:
     Type: AWS::Glue::Crawler
     Properties:
@@ -417,6 +518,7 @@ Resources:
             Tables:
               - !Ref GlueTableStationHistory
               - !Ref GlueTableDetailHistory
+              - !Ref GlueTableReview
 
   # -------------------------------- REDSHIFT SECURITY/SUBNET GROUP
   SGroupRedshift:
@@ -652,6 +754,24 @@ Resources:
         '--glue_db': bikedb_spectrum
       MaxCapacity: 0.0625
       Timeout: 30
+  JobLoadStationReview:
+    Type: AWS::Glue::Job
+    Properties:
+      Description: Glue Job to load user review sentiments to Redshift
+      Role: !Ref RoleLoadStationHistoryJob
+      GlueVersion: 1.0
+      Connections:
+        Connections:
+        - !Ref GlueConnRedshift
+      Command:
+        Name: pythonshell
+        PythonVersion: 3
+        ScriptLocation: !Sub 's3://${ArtifactsBucket}/artifacts/glue_load_station_review_redshift.py'
+      DefaultArguments:
+        '--db_creds': !Ref SecretRedshiftMaster
+        '--glue_db': bikedb_spectrum
+      MaxCapacity: 0.0625
+      Timeout: 30
 
   # -------------------------------- GLUE WORKFLOW
   TriggerLoadStationHistory:
@@ -676,6 +796,20 @@ Resources:
       StartOnCreation: true
       Actions:
         - JobName: !Ref JobLoadStationDetail
+      Predicate:
+        Conditions:
+          - LogicalOperator: EQUALS
+            CrawlerName: !Ref CrawlerStationHistory
+            CrawlState: SUCCEEDED
+      WorkflowName: !Ref WorkflowLoadStationHistory
+  TriggerLoadStationReview:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Description: Trigger to load user reviews to Redshift after Crawler
+      Type: CONDITIONAL
+      StartOnCreation: true
+      Actions:
+        - JobName: !Ref JobLoadStationReview
       Predicate:
         Conditions:
           - LogicalOperator: EQUALS
