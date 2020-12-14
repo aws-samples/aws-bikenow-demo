@@ -56,7 +56,7 @@ export default class Rides extends React.Component<RidesProps, RidesState> {
   }
 
   renderRidesList(rides: Ride[]) {
-    let ridesList: Ride[] = [];
+    const ridesList: Ride[] = [];
 
     return ridesList.concat(rides).map(
       (ride, i) =>

@@ -41,11 +41,11 @@ export default class Reviews extends React.Component<ReviewsProps, ReviewsState>
 
     try {
       const result = await this.reviews();
-      let reviews: Review[] = []
+      const reviews: Review[] = []
       for (let i = 0; i < result.length; i++) {
-        let element = result[i];
+        const element = result[i];
 
-        let review : Review = {
+        const review : Review = {
           userId: element.user_id,
           stationId: element.station_id,
           stationName: element.station_name,
@@ -67,7 +67,7 @@ export default class Reviews extends React.Component<ReviewsProps, ReviewsState>
   }
 
   renderReviewsList(reviews: Review[]) {
-    let reviewsList: Review[] = [];
+    const reviewsList: Review[] = [];
 
     return reviewsList.concat(reviews).map(
       (review, i) =>

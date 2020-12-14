@@ -3,13 +3,14 @@ import { Spinner } from "react-bootstrap";
 import API from '@aws-amplify/api';
 import Auth from '@aws-amplify/auth';
 
-var QuickSightEmbedding = require('amazon-quicksight-embedding-sdk');
+import QuickSightEmbedding from 'amazon-quicksight-embedding-sdk';
+//import QuickSightEmbedding = require('amazon-quicksight-embedding-sdk');
 
-const Embed = ({}) => {
+const Embed = (_) => {
     
-  var jwtToken : string;
-  var payloadSub : any;
-  var email : any;
+  let jwtToken : string;
+  let payloadSub : any;
+  let email : any;
   
   Auth.currentSession()
     .then(data => { 
@@ -20,7 +21,7 @@ const Embed = ({}) => {
     .catch(err => console.log(err));
   
   async function loadDashboard(e : any) {
-    let myInit = { 
+    const myInit = { 
         headers: {},
         response: true,
         queryStringParameters: { 
@@ -31,9 +32,9 @@ const Embed = ({}) => {
     }
     const data = await API.get('bikenow', '/report', myInit);
 
-    var containerDiv = document.getElementById("dashboardContainer");
-    var dashboard;
-    var options = {
+    const containerDiv = document.getElementById("dashboardContainer");
+    //let dashboard;
+    const options = {
         url: data.data.data.EmbedUrl,
         container: containerDiv,
         parameters: {
@@ -47,7 +48,7 @@ const Embed = ({}) => {
     if (containerDiv) {
       containerDiv.innerHTML = "";
     }
-    dashboard = QuickSightEmbedding.embedDashboard(options);
+    const dashboard = QuickSightEmbedding.embedDashboard(options);
   }
 
   window.addEventListener('load', loadDashboard);

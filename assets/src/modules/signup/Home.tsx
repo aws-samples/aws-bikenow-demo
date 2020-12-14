@@ -93,7 +93,7 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   bikeStations(query_string='*') {
-    let myInit = {
+    const myInit = {
       queryStringParameters: {
         q: query_string
       }
@@ -102,13 +102,13 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   predictions() {
-    let year = this.state.predictInput.getFullYear();
-    let month = this.state.predictInput.getMonth() + 1;
-    let day = this.state.predictInput.getDate();
-    let hour = this.state.predictInput.getHours();
-    let stationIds = this.state.bikeStations.map(o => o.stationId);
+    const year = this.state.predictInput.getFullYear();
+    const month = this.state.predictInput.getMonth() + 1;
+    const day = this.state.predictInput.getDate();
+    const hour = this.state.predictInput.getHours();
+    const stationIds = this.state.bikeStations.map(o => o.stationId);
 
-    let query = {
+    const query = {
       year: year,
       month: month,
       day: day,
@@ -120,7 +120,7 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   reviews(stationId: number) {
-    let myInit = {
+    const myInit = {
       queryStringParameters: {
         stationId: stationId,
       }
@@ -129,20 +129,20 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   async bindBikeStationsToMap(query_string='*') {
-    let result = await this.bikeStations(query_string);
+    const result = await this.bikeStations(query_string);
 
-    let stationList: BikeStation[] = [];
+    const stationList: BikeStation[] = [];
 
     for (let i = 0; i < result.hits.hits.length; i++) {
-      let item = result.hits.hits[i]._source;
+      const item = result.hits.hits[i]._source;
 
-      let new_station: BikeStation = {
+      const new_station: BikeStation = {
         stationId: item.station_id,
         name: item.name,
         lon: item.lon,
         lat: item.lat,
-        numOfBikes: (item.hasOwnProperty('num_bikes_available') ? item.num_bikes_available : 0),
-        capacity: (item.hasOwnProperty('capacity') ? item.capacity : 0),
+        numOfBikes: (Object.prototype.hasOwnProperty.call(item, 'num_bikes_available') ? item.num_bikes_available : 0),
+        capacity: (Object.prototype.hasOwnProperty.call(item, 'capacity') ? item.capacity : 0),
         lastReported: item.last_reported
       };
       stationList.push(new_station);
@@ -153,8 +153,8 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   async bindPredictionsToMap() {
-    let result = await this.predictions();
-    let stationsList: BikeStation[] = this.state.bikeStations;
+    const result = await this.predictions();
+    const stationsList: BikeStation[] = this.state.bikeStations;
 
     for (let i = 0; i < stationsList.length; i++) {
       stationsList[i].numOfBikes = result[stationsList[i].stationId];
@@ -164,11 +164,11 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   async bindReviewsToModal(stationId: number) {
-    let result = await this.reviews(stationId)
+    const result = await this.reviews(stationId)
     
-    let reviews: Review[] = [];
+    const reviews: Review[] = [];
     for (let i = 0; i < result.length; i++) {
-      let review: Review = {
+      const review: Review = {
         userId: result[i].user_id,
         stationId: result[i].station_id,
         stationName: result[i].station_name,
@@ -226,7 +226,7 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   handleToggleClick = () => {
-    let toggleState = !this.state.isSearchOpen;
+    const toggleState = !this.state.isSearchOpen;
     this.setState({isSearchOpen: toggleState});
   }
 
@@ -254,14 +254,14 @@ export default class Home extends Component<HomeProps, HomeState> {
   handleRideDurationChange = (event: any) => {
     const hourlyRate = 3.15;
 
-    let ride = this.state.ride;
+    const ride = this.state.ride;
     ride.duration = event.target.value;
     ride.price = ride.duration * hourlyRate;
     this.setState( { ride });
   }
 
   handleReviewChange = (event: any) => {
-    let review = this.state.review;
+    const review = this.state.review;
     review.review = event.target.value;
     if (review.review.length <= 140) {
       this.setState( { review });
@@ -341,7 +341,7 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   renderReviewsList(reviews: Review[]) {
-    let reviewsList: Review[] = [];
+    const reviewsList: Review[] = [];
 
     return reviewsList.concat(reviews).map(
       (review, i) =>
@@ -358,7 +358,6 @@ export default class Home extends Component<HomeProps, HomeState> {
       <Modal
         show={this.state.showReviewModal}
         onHide={() => this.handleToggleReviewModal(false)}
-        container={this}
         aria-labelledby="contained-modal-title"
         id="contained-modal">
         <Modal.Header closeButton>
@@ -411,7 +410,6 @@ export default class Home extends Component<HomeProps, HomeState> {
       <Modal
         show={this.state.showRideModal}
         onHide={() => this.handleToggleRideModal(false)}
-        container={this}
         aria-labelledby="contained-modal-title"
         id="contained-modal">
         <Modal.Header closeButton>
@@ -466,7 +464,7 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   renderBikeStations(bikeStations: BikeStation[]) {
-    let stationsList: BikeStation[] = [];
+    const stationsList: BikeStation[] = [];
     return stationsList.concat(bikeStations).map(
       (station, i) => {
         let markerColor = 'black';
@@ -587,7 +585,7 @@ export default class Home extends Component<HomeProps, HomeState> {
   }
 
   render() {
-    let { redirect } = this.state;
+    const { redirect } = this.state;
     if (redirect) {
       return <Redirect push to={redirect} />;
     }

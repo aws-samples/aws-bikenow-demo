@@ -12,12 +12,18 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "preserve",
-    "lib": ["es2015", "es2017", "dom", "esnext.asynciterable"],
+    "jsx": "react",
+    "lib": [
+      "es2015",
+      "es2017",
+      "dom",
+      "esnext.asynciterable"
+    ],
     "typeRoots": [
       "./src/types",
       "./node_modules/@types"
-    ]
+    ],
+    "noFallthroughCasesInSwitch": true
   },
   "include": [
     "src"
