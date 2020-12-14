@@ -4,7 +4,9 @@ module.exports = {
   rules: {
     '@typescript-eslint/ban-ts-comment': 'off',
     'no-useless-escape': 0,
-    'prefer-const': 0
+    'prefer-const': 0,
+    'react/prop-types': 0,
+    'react/display-name': 0
   },
   plugins: [
     '@typescript-eslint',
