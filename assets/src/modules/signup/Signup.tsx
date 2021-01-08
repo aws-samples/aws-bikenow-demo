@@ -40,7 +40,7 @@ export default class Signup extends React.Component<SignupProps, SignupState> {
     };
   }
 
-  onChange = (event: React.FormEvent<FormControlProps>) => {
+  onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const target = event.target as HTMLInputElement;
     this.setState({ ...this.state, [target.name]: target.value });
   }
@@ -104,7 +104,7 @@ export default class Signup extends React.Component<SignupProps, SignupState> {
             name="confirmationCode"
             type="tel"
             value={confirmationCode}
-            onChange={this.onChange}
+            onChange={(event) => this.onChange(event as any)}
             minLength={1}
             required />
           <FormControl.Feedback />

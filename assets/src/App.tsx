@@ -56,7 +56,7 @@ class App extends Component<AppProps, AppState> {
     <Form inline>
       <Button variant="outline-light" href="/rides" className="mr-sm-2 uniform-width">Rides</Button>
       <Button variant="outline-light" href="/reviews" className="mr-sm-2 uniform-width">Reviews</Button>
-      {/* <Button variant="outline-light" href="/report" className="mr-sm-2 uniform-width">Report</Button> */}
+      <Button variant="outline-light" href="/report" className="mr-sm-2 uniform-width">Report</Button>
       <Button variant="outline-light" onClick={this.handleLogout} className="uniform-width">Log out</Button>
     </Form>
   );

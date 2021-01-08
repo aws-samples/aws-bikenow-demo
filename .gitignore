@@ -4,3 +4,4 @@
 **build
 output.yaml
 .vscode/settings.json
+assets/.eslintcache

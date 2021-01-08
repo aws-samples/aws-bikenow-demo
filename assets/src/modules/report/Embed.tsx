@@ -3,10 +3,10 @@ import { Spinner } from "react-bootstrap";
 import API from '@aws-amplify/api';
 import Auth from '@aws-amplify/auth';
 
-import QuickSightEmbedding from 'amazon-quicksight-embedding-sdk';
-//import QuickSightEmbedding = require('amazon-quicksight-embedding-sdk');
+//import { embedDashboard } from 'amazon-quicksight-embedding-sdk';
+const QuickSightEmbedding = require("amazon-quicksight-embedding-sdk");
 
-const Embed = (_) => {
+const Embed = () => {
     
   let jwtToken : string;
   let payloadSub : any;

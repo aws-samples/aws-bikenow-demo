@@ -3,6 +3,7 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   rules: {
     '@typescript-eslint/ban-ts-comment': 'off',
+    '@typescript-eslint/no-var-requires': 'off',
     'no-useless-escape': 0,
     'prefer-const': 0,
     'react/prop-types': 0,

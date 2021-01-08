@@ -32,7 +32,7 @@ export default class Login extends React.Component<LoginProps, LoginState> {
     };
   }
 
-  onChange = (event: React.FormEvent<FormControlProps>) => {
+  onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const target = event.target as HTMLInputElement;
     this.setState({ ...this.state, [target.name]: target.value });
   }
@@ -71,7 +71,7 @@ export default class Login extends React.Component<LoginProps, LoginState> {
               name="email"
               type="email"
               value={email}
-              onChange={this.onChange}
+              onChange={(event) => this.onChange(event as any)}
               isValid={emailRegex.test(email.toLowerCase())}
               required />
             <FormControl.Feedback type="invalid">Must be a valid email address</FormControl.Feedback>

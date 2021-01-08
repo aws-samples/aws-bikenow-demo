@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import { Accordion, Card, Button, Table, Spinner, FormLabel, FormControl, Modal, Form, Col } from "react-bootstrap";
 import API from "@aws-amplify/api";
 import { Redirect } from "react-router-dom";
-import { Map, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import DatePicker from "react-datepicker";
 
 import bikenowImage from "../../images/bikenow-demo.png";
@@ -160,7 +160,8 @@ export default class Home extends Component<HomeProps, HomeState> {
       stationsList[i].numOfBikes = result[stationsList[i].stationId];
     }
     
-    this.setState({ bikeStations: stationsList });
+    const bikeStations = stationsList;
+    this.setState({ bikeStations });
   }
 
   async bindReviewsToModal(stationId: number) {
@@ -366,7 +367,7 @@ export default class Home extends Component<HomeProps, HomeState> {
         <Modal.Body>
           <h5 className="modal-prompt">Write a review:</h5>
           <Form>
-            <Form.Control as="textarea" rows="4" value={review.review} onChange={this.handleReviewChange} />
+            <Form.Control as="textarea" rows={4} value={review.review} onChange={this.handleReviewChange} />
           </Form>
         </Modal.Body>
         <Modal.Footer>
@@ -472,7 +473,7 @@ export default class Home extends Component<HomeProps, HomeState> {
         else if (station.numOfBikes >= 5) markerColor = 'yellow';
         else if (station.numOfBikes >= 1) markerColor = 'red';
         return (
-          <CircleMarker key={station.stationId} center={[station.lat, station.lon]} color={markerColor} radius={10}>
+          <CircleMarker key={station.stationId} center={[station.lat, station.lon]} pathOptions={{ color: markerColor, fillColor: markerColor }} radius={10}>
             <Popup className='request-popup'>
               <Table>
                 <thead>
@@ -570,13 +571,13 @@ export default class Home extends Component<HomeProps, HomeState> {
                 </Accordion.Collapse>
               </Card>
             </Accordion>
-            <Map center={[position.lat, position.lon]} zoom={position.zoom}>
+            <MapContainer center={[position.lat, position.lon]} zoom={position.zoom}>
               <TileLayer
                 attribution='&amp;copy <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
                 { this.renderBikeStations(this.state.bikeStations) }        
-            </Map>
+            </MapContainer>
             <div>&nbsp;</div>
             { this.state.showRideModal && this.renderRideModal() }
             { this.state.showReviewModal && this.renderReviewModal() }

@@ -172,7 +172,7 @@ Resources:
           phases:
             install:
               runtime-versions:
-                nodejs: 8
+                nodejs: 10
             pre_build:
               commands:
                 - echo Installing NPM dependencies...
@@ -184,9 +184,8 @@ Resources:
               commands:
                 - echo Uploading to S3BucketWeb 
                 - aws s3 cp --recursive ./build s3://${S3BucketWeb}/ 
-                - aws s3 cp --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/service-worker.js s3://${S3BucketWeb}/
                 - aws s3 cp --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/index.html s3://${S3BucketWeb}/
-                - aws cloudfront create-invalidation --distribution-id ${WebsiteCDN} --paths /index.html /service-worker.js
+                - aws cloudfront create-invalidation --distribution-id ${WebsiteCDN} --paths /index.html
           artifacts:
             files:
               - '**/*'
