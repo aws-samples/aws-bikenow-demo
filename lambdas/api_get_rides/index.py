@@ -20,7 +20,7 @@ def connection_info(db_creds):
     secret = json.loads(get_secret_value_response['SecretString'])
   else:
     secret = json.loads(base64.b64decode(get_secret_value_response['SecretBinary']))
-    
+  
   return secret
 
 def lambda_handler(event, context):
@@ -47,7 +47,7 @@ def lambda_handler(event, context):
 
     print('[INFO] Connecting...')
     conn_info = connection_info(DB_CREDS)
-    conn = pymysql.connect(conn_info['host'], user=conn_info['username'], passwd=conn_info['password'], db=conn_info['dbname'], connect_timeout=30, cursorclass=pymysql.cursors.DictCursor)
+    conn = pymysql.connect(host=conn_info['host'], user=conn_info['username'], password=conn_info['password'], database=conn_info['dbname'], connect_timeout=30, cursorclass=pymysql.cursors.DictCursor)
     with conn.cursor() as cur:
       print('[INFO] Executing SQL: {}'.format(sql))
       cur.execute(sql)
