@@ -184,13 +184,15 @@ Resources:
               commands:
                 - echo Uploading to S3BucketWeb 
                 - aws s3 cp --recursive ./build s3://${S3BucketWeb}/ 
+                - aws s3 cp --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/service-worker.js s3://${S3BucketWeb}/
                 - aws s3 cp --cache-control="max-age=0, no-cache, no-store, must-revalidate" ./build/index.html s3://${S3BucketWeb}/
                 - aws cloudfront create-invalidation --distribution-id ${WebsiteCDN} --paths /index.html
+                - aws cloudfront create-invalidation --distribution-id ${WebsiteCDN} --paths /index.html /service-worker.js
           artifacts:
             files:
               - '**/*'
             base-directory: build        
-      TimeoutInMinutes: 5
+      TimeoutInMinutes: 15
   AssetsCodePipeline:
     Type: 'AWS::CodePipeline::Pipeline'
     Properties:

@@ -55,7 +55,7 @@ def lambda_handler(event, context):
           '''.format(user_id, input['station_id'], input['station_name'], input['duration'], input['price'])
 
     print('[INFO] Connecting...')
-    
+    conn_info = connection_info(DB_CREDS)
     conn = pymysql.connect(host=conn_info['host'], user=conn_info['username'], password=conn_info['password'], database=conn_info['dbname'], connect_timeout=30)
     with conn.cursor() as cur:
       print('[INFO] Executing SQL: {}'.format(sql))
