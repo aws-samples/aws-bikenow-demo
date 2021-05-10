@@ -195,6 +195,15 @@ h5.modal-prompt {
   margin-top: .375rem;
 }
 
+.form-group-inline {
+  display: inline-block;
+  padding: 2px;
+}
+
+.form-group-inline.col-md-1 {
+  width: auto !important;
+}
+
 input {
   display: block;
   width: 100%;

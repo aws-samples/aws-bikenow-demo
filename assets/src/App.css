@@ -45,3 +45,8 @@
   background-color: transparent !important;
   box-shadow: none !important;
 }
+
+.navbar-nav.ml-auto {
+  position: absolute;
+  right: 0px;
+}

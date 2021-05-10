@@ -527,7 +527,7 @@ export default class Home extends Component<HomeProps, HomeState> {
             <h2>Real-time Bike Station Status</h2>
             <Form>
               <Form.Row>
-                <Form.Group as={Col} md="8">
+                <Form.Group as={Col} md="8" className="form-group-inline">
                   <FormControl 
                     id="search"
                     minLength={1}
@@ -537,10 +537,10 @@ export default class Home extends Component<HomeProps, HomeState> {
                     onKeyPress={this.handleSearchKeyPress}
                     required />
                 </Form.Group>
-                <Form.Group as={Col} md="1">
+                <Form.Group as={Col} md="1" className="form-group-inline">
                   <Button variant="primary" type='button' className='uniform-width' onClick={this.handleSearchClick} disabled={!this.validateSearchForm()}>Search</Button>
                 </Form.Group>
-                <Form.Group as={Col} md="1">
+                <Form.Group as={Col} md="1" className="form-group-inline">
                   <Button variant="primary" type='button' className='uniform-width' onClick={this.handleClearClick}>Clear</Button>
                 </Form.Group>
               </Form.Row>
@@ -556,13 +556,13 @@ export default class Home extends Component<HomeProps, HomeState> {
                   <Card.Body className="adv-search-body">
                     <Form>
                       <Form.Row>
-                        <Form.Group as={Col} md="8">
+                        <Form.Group as={Col} md="8" className="form-group-inline">
                           <DatePicker selected={this.state.predictInput} 
                                       onChange={this.handlePredictChange} 
                                       showTimeSelect 
                                       dateFormat="Pp" />
                         </Form.Group>
-                        <Form.Group as={Col} md="1">
+                        <Form.Group as={Col} md="1" className="form-group-inline">
                           <Button variant="primary" type="button" className="uniform-width" onClick={this.handlePredictClick}>Plan</Button>
                         </Form.Group>
                       </Form.Row>
