@@ -48,7 +48,8 @@
     "immer": ">=8.0.1",
     "is-svg": ">=4.2.2",
     "ssri": ">=8.0.1",
-    "xmldom": ">0.5.0"
+    "xmldom": ">0.5.0",
+    "postcss": ">=8.2.10"
   },
   "scripts": {
     "preinstall": "npx npm-force-resolutions",
