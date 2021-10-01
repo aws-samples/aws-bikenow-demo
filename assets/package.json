@@ -45,7 +45,7 @@
     "zen-observable": "0.8.15"
   },
   "resolutions": {
-    "immer": ">=8.0.1",
+    "immer": ">=9.0.6",
     "is-svg": ">=4.2.2",
     "ssri": ">=8.0.1",
     "xmldom": ">0.5.0",
